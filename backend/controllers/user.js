@@ -3,19 +3,31 @@ const jwt = require('jsonwebtoken');
 
 const User = require('../models/User');
 
-exports.signup = (req, res, next) => {
-    bcrypt.hash(req.body.password, 10)
+// fonction signUp pour gérer l'inscription de l'utilisateur
+const signUp = (req, res, next) => {
+    // déstructurer l'email et le mot de passe du corps de la requête
+    const { email, password } = req.body;
+    // si l'adresse e-mail ou le mot de passe n'est pas fourni, renvoie une erreur 400 Bad Request
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email et mot de passe sont requis' });
+    }
+    // hacher le mot de passe avec bcrypt
+    bcrypt.hash(password, 10)
         .then(hash => {
-            const user = new User({
-                email: req.body.email,
-                password: hash
-            });
-            user.save()
-            .then(() => res.status(201).json({ message: 'Utilisateur créé !' }))
-            .catch(error => res.status(400).json({ error }));
+            // créer un nouvel objet utilisateur avec l'e-mail et le mot de passe haché
+            const user = new User({ email, password: hash });
+            // enregistrer l'utilisateur dans la base de données
+            return user.save();
         })
-        .catch(error => res.status(500).json({ error }));
-        next();
+        .then(() => res.status(201).json({ message: 'Utilisateur créé !' }))
+        .catch(error => {
+            // si l'erreur est une erreur de clé en double MongoDB, renvoie une erreur 400 Bad Request
+            if (error.name === 'MongoError' && error.code === 11000) {
+                return res.status(400).json({ error: 'email existant déjà' });
+            }
+            // renvoie une erreur de serveur interne 500 pour toute autre erreur
+            res.status(500).json({ error: 'Échec de la création utilisateur' });
+        });
 };
 
 exports.login = (req, res, next) => {
@@ -38,8 +50,11 @@ exports.login = (req, res, next) => {
                     )
                 });
             })
-            .catch(error => res.status(500).json({ error }));
+            .catch(error => res.status(500).json({ message: 'probleme bcrypt.compare' }));
     })
-    .catch(error => res.status(500).json({ error }));
+    .catch(error => res.status(500).json({ message: 'problème avec User.findOne' }));
     next();
 };
+
+// Exporter les fonctions d'inscription et de connexion en tant qu'exportations du module
+module.exports = signUp;
